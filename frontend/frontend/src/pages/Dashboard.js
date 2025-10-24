@@ -1,23 +1,37 @@
 // src/pages/Dashboard.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getTransactions, addTransaction, deleteTransaction } from '../service/transactionService';
+import { getTransactions, addTransaction, deleteTransaction, updateTransaction } from '../services/transactionService';
 import Loader from '../components/Loader';
-import styles from '../styles/Dashboard.module.css';
+import DataCharts from '../components/DataCharts';
+
+import { Container, Title, Paper, Group, Button, TextInput, NumberInput, Select, SimpleGrid, Text, ActionIcon, SegmentedControl } from '@mantine/core';
+import { DatePickerInput } from '@mantine/dates';
+import { useForm } from '@mantine/form';
+import { IconTrash, IconPencil } from '@tabler/icons-react';
 
 const Dashboard = () => {
+  // --- States ---
   const [transactions, setTransactions] = useState([]);
-  const [formData, setFormData] = useState({ title: '', amount: '', type: 'expense', category: '' });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [filter, setFilter] = useState('all');
+  const [sort, setSort] = useState('date-desc');
+  const [editingId, setEditingId] = useState(null);
 
-  useEffect(() => {
-    fetchTransactions();
-  }, []);
+  const form = useForm({
+    initialValues: { title: '', amount: 0, type: 'expense', category: '', date: new Date() },
+    validate: {
+      title: (value) => (value.trim().length < 2 ? 'Title is too short' : null),
+      amount: (value) => (value <= 0 ? 'Amount must be positive' : null),
+      category: (value) => (value.trim().length < 2 ? 'Category is required' : null),
+    },
+  });
 
+  // --- Data Fetching ---
   const fetchTransactions = async () => {
     try {
-      setLoading(true);
+      // No need to setLoading(true) here, it's set on initial load
       const data = await getTransactions();
       setTransactions(data);
       setError(null);
@@ -28,81 +42,136 @@ const Dashboard = () => {
       setLoading(false);
     }
   };
+  useEffect(() => { fetchTransactions(); }, []);
 
-  const handleInputChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
-
-  const handleAddTransaction = async (e) => {
-    e.preventDefault();
+  // --- Handlers ---
+  const handleSubmit = async (values) => {
     try {
-      const newTransaction = await addTransaction(formData);
-      setTransactions([newTransaction, ...transactions]);
-      setFormData({ title: '', amount: '', type: 'expense', category: '' });
-      setError(null);
+      if (editingId) {
+        // --- CORRECTED: Update logic ---
+        const result = await updateTransaction(editingId, values);
+        setTransactions(transactions.map(t => (t._id === editingId ? result : t)));
+      } else {
+        // --- CORRECTED: Add logic ---
+        const result = await addTransaction(values);
+        setTransactions([result, ...transactions]);
+      }
+      form.reset();
+      setEditingId(null);
     } catch (err) {
-      setError('Failed to add transaction.');
       console.error(err);
+      setError('Failed to save transaction.');
     }
   };
 
+  const handleEditClick = (transaction) => {
+    setEditingId(transaction._id);
+    form.setValues({
+        ...transaction,
+        date: new Date(transaction.date)
+    });
+  };
+  
   const handleDelete = async (id) => {
     try {
       await deleteTransaction(id);
       setTransactions(transactions.filter(t => t._id !== id));
-      setError(null);
     } catch (err) {
-      setError('Failed to delete transaction.');
       console.error(err);
+      setError('Failed to delete transaction.');
     }
   };
+  
+  // --- CORRECTED: Memoized function with state copy ---
+  const filteredAndSortedTransactions = useMemo(() => {
+    return [...transactions] // Create a copy here to prevent mutation
+      .filter(t => filter === 'all' || t.type === filter)
+      .sort((a, b) => {
+        switch (sort) {
+          case 'date-asc': return new Date(a.date) - new Date(b.date);
+          case 'amount-desc': return b.amount - a.amount;
+          case 'amount-asc': return a.amount - b.amount;
+          default: return new Date(b.date) - new Date(a.date);
+        }
+      });
+  }, [transactions, filter, sort]);
 
   if (loading) return <Loader />;
   
   return (
-    <motion.div 
-      className={styles.container}
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-    >
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-      
-      <h2>Add New Transaction</h2>
-      <form onSubmit={handleAddTransaction} className={styles.form}>
-        <input type="text" placeholder="Title" name="title" value={formData.title} onChange={handleInputChange} required />
-        <input type="number" placeholder="Amount" name="amount" value={formData.amount} onChange={handleInputChange} required />
-        <select name="type" value={formData.type} onChange={handleInputChange}>
-          <option value="expense">Expense</option>
-          <option value="income">Income</option>
-        </select>
-        <input type="text" placeholder="Category" name="category" value={formData.category} onChange={handleInputChange} required />
-        <button type="submit">Add Transaction</button>
-      </form>
+    <Container size="lg" my="xl">
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }}>
+        <Title order={1} mb="xl">Dashboard</Title>
+        {error && <Text c="red" mb="md">{error}</Text>}
+        
+        <DataCharts transactions={transactions} />
 
-      <h2>Your Transactions</h2>
-      <ul className={styles.transactionList}>
+        <Paper withBorder shadow="md" p="lg" my="xl" radius="md">
+          <Title order={3} mb="md">{editingId ? 'Edit Transaction' : 'Add New Transaction'}</Title>
+          <form onSubmit={form.onSubmit(handleSubmit)}>
+            <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
+              <TextInput label="Title" placeholder="e.g., Coffee" {...form.getInputProps('title')} />
+              <NumberInput label="Amount" placeholder="e.g., 5.00" min={0} precision={2} {...form.getInputProps('amount')} />
+              <Select label="Type" data={['expense', 'income']} {...form.getInputProps('type')} />
+              <TextInput label="Category" placeholder="e.g., Food" {...form.getInputProps('category')} />
+              <DatePickerInput label="Date" placeholder="Select date" {...form.getInputProps('date')} />
+            </SimpleGrid>
+            <Group justify="flex-end" mt="md">
+              {editingId && <Button variant="default" onClick={() => { setEditingId(null); form.reset(); }}>Cancel</Button>}
+              <Button type="submit">{editingId ? 'Update' : 'Add'}</Button>
+            </Group>
+          </form>
+        </Paper>
+
+        <Group justify="space-between" mb="md">
+          <Title order={3}>Your Transactions</Title>
+          <Group>
+            <SegmentedControl
+              value={filter}
+              onChange={setFilter}
+              data={[
+                { label: 'All', value: 'all' },
+                { label: 'Income', value: 'income' },
+                { label: 'Expenses', value: 'expense' },
+              ]}
+            />
+            <Select
+              value={sort}
+              onChange={setSort}
+              data={[
+                { value: 'date-desc', label: 'Date (Newest)' },
+                { value: 'date-asc', label: 'Date (Oldest)' },
+                { value: 'amount-desc', label: 'Amount (High-Low)' },
+                { value: 'amount-asc', label: 'Amount (Low-High)' },
+              ]}
+            />
+          </Group>
+        </Group>
+
         <AnimatePresence>
-          {transactions.length > 0 ? (
-            transactions.map(t => (
-              <motion.li 
-                key={t._id} 
-                className={styles.transactionItem}
-                initial={{ opacity: 0, x: -50 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 50 }}
-                transition={{ duration: 0.3 }}
-              >
-                <span>{t.title}: <strong>${t.amount}</strong> ({t.type}) - <em>{t.category}</em></span>
-                <button onClick={() => handleDelete(t._id)} className={styles.deleteButton}>Delete</button>
-              </motion.li>
-            ))
-          ) : (
-            !loading && <p>You have no transactions yet. Add one to get started!</p>
-          )}
+          {filteredAndSortedTransactions.map(t => (
+            <motion.div key={t._id} layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, x: 50 }}>
+              <Paper withBorder p="md" radius="md" mb="sm">
+                <Group justify="space-between">
+                  <div>
+                    <Text fw={500}>{t.title}</Text>
+                    <Text c="dimmed" size="sm">{t.category}</Text>
+                  </div>
+                  <Group>
+                    <Text fw={700} c={t.type === 'income' ? 'teal' : 'red'}>
+                      {t.type === 'income' ? '+' : '-'}${t.amount.toFixed(2)}
+                    </Text>
+                    <ActionIcon variant="default" onClick={() => handleEditClick(t)}><IconPencil size={16} /></ActionIcon>
+                    <ActionIcon color="red" variant="light" onClick={() => handleDelete(t._id)}><IconTrash size={16} /></ActionIcon>
+                  </Group>
+                </Group>
+              </Paper>
+            </motion.div>
+          ))}
         </AnimatePresence>
-      </ul>
-    </motion.div>
+        {filteredAndSortedTransactions.length === 0 && !loading && <Text c="dimmed" ta="center" mt="xl">No transactions to display.</Text>}
+      </motion.div>
+    </Container>
   );
 };
 

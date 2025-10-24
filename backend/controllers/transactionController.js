@@ -71,3 +71,40 @@ exports.deleteTransaction = async (req, res) => {
         return res.status(500).json({ error: 'Server Error' });
     }
 };
+
+// @desc    Update/Edit a transaction
+// @route   PUT /api/transactions/:id
+const updateTransaction = async(req, res) => {
+    try {
+        const { userId } =  req.body;
+        
+        if(!userId) {
+            return res.status(401).json({error: "User not authorized."});
+        }
+        const transaction = await Transaction.findById(req.params.id);
+
+        if(!transaction) {
+            return res.status(404).json({error: "No transaction found."})
+        }
+
+        if(transaction.userId !== userId) {
+            res.status(403).json({error: "User not authorized to update this transaction!"})
+        }
+
+        const { title, amount, type, date, category } = req.body;
+        
+        transaction.title = title;
+        transaction.amount = amount;
+        transaction.type = type;
+        transaction.date = date;
+        transaction.category = category;
+
+        await transaction.save(); 
+        return res.status(200).json(transaction);
+
+
+    } catch (error) {
+        console.log("Updation error: ", error)
+        return res.status(500).json({error: "Internal Server Error"})
+    }
+}

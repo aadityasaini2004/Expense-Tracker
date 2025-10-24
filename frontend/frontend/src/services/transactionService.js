@@ -49,3 +49,16 @@ export const deleteTransaction = async (id) => {
     });
     return response.data;
 };
+
+
+// update/edit transaction
+export const updateTransaction = async(id, transactionData) => {
+    const token = await getAuthToken();
+    if(!token) throw new Error("User not authorized!");
+
+    const response = await axios.put(`${API_URL}/${id}`, transactionData, {
+        headers: {'Authorization': `Bearer ${token}`}
+    });
+
+    return response.data;
+}
