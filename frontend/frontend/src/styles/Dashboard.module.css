@@ -1,0 +1,63 @@
+/* src/styles/Dashboard.module.css */
+.container {
+  max-width: 800px;
+  margin: 2rem auto;
+  padding: 2rem;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+.form {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+}
+
+.form input, .form select {
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  font-size: 1rem;
+}
+
+.form button {
+  padding: 10px 20px;
+  background-color: #4A90E2;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background-color 0.2s;
+}
+
+.form button:hover {
+  background-color: #357ABD;
+}
+
+.transactionList {
+  list-style: none;
+  padding: 0;
+}
+
+.transactionItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  border-bottom: 1px solid #eee;
+}
+
+.deleteButton {
+  background-color: #e74c3c;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.deleteButton:hover {
+  background-color: #c0392b;
+}
